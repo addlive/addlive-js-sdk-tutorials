@@ -244,11 +244,12 @@ ADLT.tryReconnect = function () {
   setTimeout(function () {
     log.debug("Trying to reestablish the connection to the AddLive Streaming " +
         "Server");
+	var connDescriptor = ADLT.genConnectionDescriptor();
 
 //    1. Define the result handler
     var succHandler = function () {
       log.debug("Connection successfully reestablished!");
-      ADLT.postConnectHandler(ADLT.currentConnDescriptor);
+      ADLT.postConnectHandler(connDescriptor);
     };
 
 //    2. Define the failure handler
@@ -257,7 +258,6 @@ ADLT.tryReconnect = function () {
       ADLT.tryReconnect();
     };
 //    3. Try to connect
-    var connDescriptor = ADLT.genConnectionDescriptor();
     ADL.getService().connect(ADL.createResponder(succHandler, errHandler),
         connDescriptor);
   }, 5000);
@@ -306,12 +306,17 @@ ADLT.connect = function () {
 //  3. Define the result handler - delegates the processing to the
 //     postConnectHandler
   var connDescriptor = ADLT.genConnectionDescriptor(ADLT.scopeId, ADLT.userId);
+
   var onSucc = function () {
-    ADLT.postConnectHandler();
+	log.debug("Successfully established a connection to the AddLive Streaming Server");
+	
+    ADLT.postConnectHandler(connDescriptor);
   };
 
 //  4. Define the error handler - enabled the connect button again
   var onErr = function () {
+	log.debug("Unsuccessfully established a connection to the AddLive Streaming Server");
+	
     $('#connectBtn').click(ADLT.connect).removeClass('disabled');
   };
 
@@ -362,7 +367,7 @@ ADLT.disconnectHandler = function () {
  * Internet connectivity issues.
  *
  */
-ADLT.postConnectHandler = function () {
+ADLT.postConnectHandler = function (connDescriptor) {
   log.debug("Connected. Disabling connect button and enabling the disconnect");
 
 //  1. Enable the disconnect button
@@ -372,6 +377,30 @@ ADLT.postConnectHandler = function () {
   $('#localUserIdLbl').html(connDescriptor.authDetails.userId);
 
 };
+
+ADLT.genAuthDetails = function (scopeId, userId) {
+
+  // New Auth API
+  var dateNow = new Date();
+  var now = Math.floor((dateNow.getTime() / 1000));
+  var authDetails = {
+    // Token valid 5 mins
+    expires:now + (5 * 60),
+    userId:userId,
+    salt:ADLT.randomString(100)
+  };
+  var signatureBody =
+      ADLT.APPLICATION_ID +
+          scopeId +
+          userId +
+          authDetails.salt +
+          authDetails.expires +
+          ADLT.APP_SHARED_SECRET;
+  authDetails.signature =
+      CryptoJS.SHA256(signatureBody).toString(CryptoJS.enc.Hex).toUpperCase();
+  return authDetails;
+};
+
 
 ADLT.genConnectionDescriptor = function (scopeId, userId) {
 //  Clone the video streaming configuration and create a connection descriptor
